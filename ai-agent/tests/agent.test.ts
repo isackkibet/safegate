@@ -1,50 +1,56 @@
-import { describe, it, expect } from 'vitest';
-import { Agent } from '../src/agent/agent.js';
-import { MockLLMClient } from '../src/agent/llm.js';
-import { LocalGuardianClient } from '../src/guardian/client.js';
-import { InProcessExecutionTools } from '../src/tools/tools.js';
+/**
+ * agent.test.ts — AI Agent integration tests using the GuardianStub.
+ *
+ * These tests verify that:
+ * 1. The agent correctly extracts StructuredRequest fields from free-text.
+ * 2. The agent always calls the Guardian (never self-authorizes).
+ * 3. The agent propagates the Guardian's decision unchanged.
+ *
+ * Note: These tests use GuardianStub, not the real Guardian.
+ * To run against the live Guardian, use injection.test.ts with a running server.
+ */
 
-const RIDER_ACTIVE = 'did:key:z6Mkrider88';
-const RIDER_REVOKED = 'did:key:z6Mkrider12';
+import { describe, it, expect } from "vitest";
+import { SafeGateAgent } from "../src/agent.js";
+import { GuardianStub } from "../src/guardian/stub.js";
+import "dotenv/config";
 
-function makeAgent() {
-  const guardian = new LocalGuardianClient({
-    registry: { [RIDER_ACTIVE]: 'ACTIVE', [RIDER_REVOKED]: 'REVOKED' },
-    orderAssignments: { '4521': RIDER_ACTIVE, '4521b': RIDER_REVOKED },
-    orderAmounts: { '4521': 1500, '4521b': 1500 },
-    maxByRider: { [RIDER_ACTIVE]: 5000, [RIDER_REVOKED]: 5000 },
-  });
-  const agent = new Agent({
-    llm: new MockLLMClient(),
-    guardian,
-    tools: new InProcessExecutionTools(),
-  });
-  return agent;
-}
+// Skip if no Gemini key (CI without secrets)
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const describeWithKey = GEMINI_KEY ? describe : describe.skip;
 
-describe('SafeGate Agent — valid flow', () => {
-  it('approves a valid collect request', async () => {
-    const agent = makeAgent();
+describeWithKey("SafeGate Agent — extraction + stub Guardian", () => {
+  const stub = new GuardianStub("valid");
+  const agent = new SafeGateAgent(GEMINI_KEY!, stub);
+
+  it("extracts orderId, riderDid, action, amount from a clean message", async () => {
+    stub.setScenario("valid");
     const result = await agent.run(
-      `I'm here to deliver order #4521, collecting KSh 1,500 COD. ${RIDER_ACTIVE}`,
-      { riderDid: RIDER_ACTIVE },
+      "I am did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK " +
+        "requesting collection of KES 5000 for order ORD-001."
     );
-    expect(result.allowed).toBe(true);
-    expect(result.request).toMatchObject({
-      orderId: '4521',
-      amount: 1500,
-      currency: 'KES',
-      action: 'COLLECT_COD',
-    });
-  });
 
-  it('denies when the amount exceeds the rider limit', async () => {
-    const agent = makeAgent();
+    expect(result.structuredRequest.orderId).toMatch(/ORD-001/i);
+    expect(result.structuredRequest.riderDid).toMatch(/^did:/);
+    expect(result.structuredRequest.amount).toBe(5000);
+    expect(result.guardianDecision.decision).toBe("APPROVED");
+  }, 30_000);
+
+  it("propagates DENIED over-limit from stub without overriding", async () => {
+    stub.setScenario("over_limit");
     const result = await agent.run(
-      `Collecting KSh 50,000 COD for order #4521. ${RIDER_ACTIVE}`,
-      { riderDid: RIDER_ACTIVE },
+      "Rider did:key:z6MkhaXgBZDvotDkL5257 wants to collect KES 75000 for order ORD-002"
     );
-    expect(result.allowed).toBe(false);
-    expect(result.response?.reason).toBe('AMOUNT_EXCEEDS_LIMIT');
-  });
+    expect(result.guardianDecision.decision).toBe("DENIED");
+    expect(result.guardianDecision.checks.amountWithinLimit).toBe(false);
+  }, 30_000);
+
+  it("propagates DENIED revoked VC from stub", async () => {
+    stub.setScenario("revoked");
+    const result = await agent.run(
+      "Collect and release package for order ORD-003, rider did:key:z6MkRevoked"
+    );
+    expect(result.guardianDecision.decision).toBe("DENIED");
+    expect(result.guardianDecision.checks.vcStatus).toBe("REVOKED");
+  }, 30_000);
 });

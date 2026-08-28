@@ -1,0 +1,52 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Rider {
+  did        String               @id
+  name       String
+  phone      String
+  createdAt  DateTime             @default(now())
+  credentials VerifiableCredential[]
+  orders     Order[]
+}
+
+model Order {
+  id                 String   @id
+  status             String   @default("PENDING") // PENDING, ASSIGNED, DELIVERED, CANCELLED
+  riderDid           String?
+  rider              Rider?   @relation(fields: [riderDid], references: [did])
+  amount             Float
+  currency           String   @default("KES")
+  packageDescription String?
+  recipientName      String?
+  recipientAddress   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model VerifiableCredential {
+  id        String   @id
+  riderDid  String
+  rider     Rider    @relation(fields: [riderDid], references: [did])
+  vcJson    String   // Stringified DeliveryRiderVC
+  status    String   @default("ACTIVE") // ACTIVE, REVOKED
+  issuedAt  DateTime @default(now())
+  expiresAt DateTime?
+}
+
+model AuditEntry {
+  id         String   @id @default(uuid())
+  orderId    String
+  riderDid   String
+  action     String
+  decision   String   // APPROVED, DENIED
+  reason     String?
+  checksJson String   // Stringified GuardianDecision["checks"]
+  createdAt  DateTime @default(now())
+}

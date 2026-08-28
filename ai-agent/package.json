@@ -1,38 +1,28 @@
 {
-  "name": "safegate-ai-agent",
+  "name": "@safegate/ai-agent",
   "version": "0.1.0",
-  "description": "SafeGate AI Agent — intent extraction, DID/VC verification, and guardian-backed release decisioning for delivery.",
+  "private": true,
   "type": "module",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
-    "build": "tsc && cp -r database dist/database",
+    "build": "tsc",
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/src/index.js",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "start": "node dist/index.js",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@stablelib/ed25519": "^2.1.0",
-    "bs58": "^6.0.0",
-    "cors": "^2.8.5",
-    "did-jwt": "^8.0.0",
-    "did-jwt-vc": "^4.0.0",
-    "did-resolver": "^4.1.0",
+    "@google/generative-ai": "^0.21.0",
+    "@safegate/shared-types": "*",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "key-did-resolver": "^4.0.0",
-    "pg": "^8.13.1",
-    "redis": "^6.2.1",
-    "zod": "^3.23.8"
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/node": "^22.5.0",
-    "@types/pg": "^8.11.10",
+    "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.5.4",
-    "vitest": "^2.1.0"
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.0"
   }
 }

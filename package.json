@@ -1,0 +1,29 @@
+{
+  "name": "safegate",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SafeGate — DID/VC-based delivery authorization system",
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "dev:guardian": "npm run dev -w @safegate/guardian",
+    "dev:backend": "npm run dev -w @safegate/backend",
+    "dev:frontend": "npm run dev -w @safegate/frontend",
+    "dev": "concurrently \"npm run dev:guardian\" \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "workspaces": [
+    "packages/*",
+    "ai-agent",
+    "guardian",
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
