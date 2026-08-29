@@ -5,6 +5,7 @@ import ordersRouter from "./routes/orders.js";
 import ridersRouter from "./routes/riders.js";
 import credentialRouter from "./routes/credentials.js";
 import auditRouter from "./routes/audit.js";
+import verifyRouter from "./routes/verify.js";
 import { eventStream } from "./events.js";
 
 const app = express();
@@ -41,7 +42,16 @@ app.use("/riders", ridersRouter);
 app.use("/", credentialRouter);
 app.use("/audit", auditRouter);
 
+// AI Agent contract — proxies to the authoritative Guardian service.
+// This is the agreed Backend endpoint the AI Agent calls, never the Guardian directly.
+app.use("/api/guardian", verifyRouter);
+
 app.get("/health", (req, res) => {
+  res.json({ status: "OK", service: "SafeGate Backend" });
+});
+
+// Alias so both /health and /api/health probes succeed
+app.get("/api/health", (req, res) => {
   res.json({ status: "OK", service: "SafeGate Backend" });
 });
 

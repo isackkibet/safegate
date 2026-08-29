@@ -41,3 +41,8 @@ lerna-debug.log*
 .aitk/
 .antigravity/
 .antigravity-ide/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3

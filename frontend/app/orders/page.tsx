@@ -4,245 +4,195 @@ import { useEffect, useState } from "react";
 import type { Order, Rider } from "@safegate/shared-types";
 import { api } from "@/lib/api";
 
+const STATUS_BADGE: Record<string, string> = {
+  ASSIGNED:  "badge badge-approved",
+  DELIVERED: "badge badge-active",
+  PENDING:   "badge badge-pending",
+  CANCELLED: "badge badge-denied",
+};
+
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [riders, setRiders] = useState<Rider[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Form states
-  const [orderId, setOrderId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("KES");
-  const [packageDesc, setPackageDesc] = useState("");
-  const [recipientName, setRecipientName] = useState("");
-  const [recipientAddress, setRecipientAddress] = useState("");
-  const [assignedRider, setAssignedRider] = useState("");
-
+  const [orders,    setOrders]    = useState<Order[]>([]);
+  const [riders,    setRiders]    = useState<Rider[]>([]);
+  const [loading,   setLoading]   = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message,   setMessage]   = useState<{ text: string; ok: boolean } | null>(null);
+
+  // form state
+  const [orderId,           setOrderId]           = useState("");
+  const [amount,            setAmount]            = useState("");
+  const [currency,          setCurrency]          = useState("KES");
+  const [packageDesc,       setPackageDesc]       = useState("");
+  const [recipientName,     setRecipientName]     = useState("");
+  const [recipientAddress,  setRecipientAddress]  = useState("");
+  const [assignedRider,     setAssignedRider]     = useState("");
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [ordersData, ridersData] = await Promise.all([
-          api.getOrders(),
-          api.getRiders(),
-        ]);
-        setOrders(ordersData);
-        setRiders(ridersData);
-      } catch (err) {
-        console.error("Failed to load orders page data:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
+    Promise.all([api.getOrders(), api.getRiders()])
+      .then(([o, r]) => { setOrders(o); setRiders(r); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  async function handleCreateOrder(e: React.FormEvent) {
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!orderId || !amount) {
-      alert("Order ID and Amount are required");
-      return;
-    }
-
     setSubmitting(true);
     setMessage(null);
-
     try {
-      const newOrder = await api.createOrder({
-        id: orderId.trim(),
-        amount: parseFloat(amount),
-        currency,
+      const o = await api.createOrder({
+        id: orderId.trim(), amount: parseFloat(amount), currency,
         packageDescription: packageDesc.trim() || undefined,
         recipientName: recipientName.trim() || undefined,
         recipientAddress: recipientAddress.trim() || undefined,
         riderDid: assignedRider || undefined,
       });
-
-      setOrders((prev) => [newOrder, ...prev]);
-
-      // Reset form
-      setOrderId("");
-      setAmount("");
-      setPackageDesc("");
-      setRecipientName("");
-      setRecipientAddress("");
-      setAssignedRider("");
-
-      setMessage("Order created successfully!");
+      setOrders(prev => [o, ...prev]);
+      setOrderId(""); setAmount(""); setPackageDesc("");
+      setRecipientName(""); setRecipientAddress(""); setAssignedRider("");
+      setMessage({ text: "Order created successfully.", ok: true });
     } catch (err) {
-      console.error(err);
-      setMessage(err instanceof Error ? err.message : "Failed to create order");
+      setMessage({ text: err instanceof Error ? err.message : "Failed to create order", ok: false });
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (loading) return <div style={{ color: "var(--text-secondary)" }}>Loading Order Manifest...</div>;
+  if (loading) return <div className="loading-state">Loading orders…</div>;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "30px" }}>
-      <div className="form-panel">
-        <div className="card">
-          <div className="card-title">Register New Order</div>
-          <form onSubmit={handleCreateOrder}>
+    <div>
+      <div className="page-title">Orders Registry</div>
+      <div className="page-sub">Create and manage delivery orders</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 20, alignItems: "start" }}>
+
+        {/* ── Create form ── */}
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <div className="card-title">📦 New Order</div>
+          </div>
+
+          <form onSubmit={handleCreate}>
             <div className="form-group">
-              <label>Order ID / Reference</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. ORD-001, ORD-993"
-                value={orderId}
-                onChange={(e) => setOrderId(e.target.value)}
-                required
-              />
+              <label>Order ID</label>
+              <input className="form-control" placeholder="e.g. ORD-006"
+                value={orderId} onChange={e => setOrderId(e.target.value)} required />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
               <div className="form-group">
-                <label>Order Amount</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  placeholder="e.g. 5000"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  required
-                />
+                <label>Amount</label>
+                <input className="form-control" type="number" placeholder="5000"
+                  value={amount} onChange={e => setAmount(e.target.value)} required />
               </div>
               <div className="form-group">
                 <label>Currency</label>
-                <select
-                  className="form-control"
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                >
-                  <option value="KES">KES</option>
-                  <option value="USD">USD</option>
+                <select className="form-control" value={currency} onChange={e => setCurrency(e.target.value)}>
+                  <option>KES</option>
+                  <option>USD</option>
                 </select>
               </div>
             </div>
 
             <div className="form-group">
-              <label>Assign Delivery Rider</label>
-              <select
-                className="form-control"
-                value={assignedRider}
-                onChange={(e) => setAssignedRider(e.target.value)}
-              >
-                <option value="">-- Unassigned (Pending Rider) --</option>
-                {riders.map((r) => (
-                  <option key={r.did} value={r.did}>
-                    {r.name} ({r.did.substring(0, 15)}...)
-                  </option>
+              <label>Assign Rider</label>
+              <select className="form-control" value={assignedRider} onChange={e => setAssignedRider(e.target.value)}>
+                <option value="">— Unassigned —</option>
+                {riders.map(r => (
+                  <option key={r.did} value={r.did}>{r.name}</option>
                 ))}
               </select>
             </div>
 
             <div className="form-group">
-              <label>Package Description</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. Electronics, Documents"
-                value={packageDesc}
-                onChange={(e) => setPackageDesc(e.target.value)}
-              />
+              <label>Package</label>
+              <input className="form-control" placeholder="e.g. Electronics, Documents"
+                value={packageDesc} onChange={e => setPackageDesc(e.target.value)} />
             </div>
 
             <div className="form-group">
               <label>Recipient Name</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. Jane Doe"
-                value={recipientName}
-                onChange={(e) => setRecipientName(e.target.value)}
-              />
+              <input className="form-control" placeholder="e.g. Jane Doe"
+                value={recipientName} onChange={e => setRecipientName(e.target.value)} />
             </div>
 
             <div className="form-group">
               <label>Delivery Address</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. Mombasa Road, Nairobi"
-                value={recipientAddress}
-                onChange={(e) => setRecipientAddress(e.target.value)}
-              />
+              <input className="form-control" placeholder="e.g. Westlands, Nairobi"
+                value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} />
             </div>
 
-            <button type="submit" className="btn" style={{ width: "100%" }} disabled={submitting}>
-              {submitting ? "Processing..." : "Create Order Entry"}
+            <button className="btn" style={{ width: "100%" }} disabled={submitting}>
+              {submitting ? "Creating…" : "Create Order"}
             </button>
 
             {message && (
-              <p
-                style={{
-                  marginTop: "16px",
-                  fontSize: "13px",
-                  textAlign: "center",
-                  color: message.includes("success") ? "var(--accent-emerald)" : "var(--accent-rose)",
-                }}
-              >
-                {message}
-              </p>
+              <div style={{
+                marginTop: 12, padding: "10px 14px", borderRadius: 6, fontSize: 12,
+                background: message.ok ? "var(--emerald-dim)" : "var(--rose-dim)",
+                color: message.ok ? "var(--emerald)" : "var(--rose)",
+                border: `1px solid ${message.ok ? "rgba(16,185,129,0.2)" : "rgba(244,63,94,0.2)"}`,
+              }}>
+                {message.ok ? "✓" : "✗"} {message.text}
+              </div>
             )}
           </form>
         </div>
-      </div>
 
-      <div className="list-panel">
-        <div className="card">
-          <div className="card-title">Active Order Manifest</div>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Status</th>
-                  <th>Amount</th>
-                  <th>Assigned Rider</th>
-                  <th>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length === 0 ? (
+        {/* ── Orders table ── */}
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <div className="card-title">📋 Order Manifest</div>
+            <span className="badge badge-info">{orders.length} orders</span>
+          </div>
+
+          {orders.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <p>No orders yet. Create one on the left.</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", color: "var(--text-secondary)", padding: "30px 0" }}>
-                      No orders registered. Use the left form to create one.
-                    </td>
+                    <th>Order ID</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Recipient</th>
+                    <th>Assigned Rider</th>
+                    <th>Package</th>
                   </tr>
-                ) : (
-                  orders.map((o) => {
-                    const statusClass =
-                      o.status === "ASSIGNED"
-                        ? "badge badge-approved"
-                        : o.status === "DELIVERED"
-                        ? "badge badge-approved"
-                        : "badge badge-pending";
-
-                    const assigned = riders.find((r) => r.did === o.riderDid);
-
+                </thead>
+                <tbody>
+                  {orders.map(o => {
+                    const rider = riders.find(r => r.did === o.riderDid);
                     return (
                       <tr key={o.id}>
-                        <td style={{ fontWeight: 600 }}>{o.id}</td>
+                        <td><strong>{o.id}</strong></td>
+                        <td><span className={STATUS_BADGE[o.status] ?? "badge badge-pending"}>{o.status}</span></td>
+                        <td><strong>{o.amount.toLocaleString()}</strong> <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{o.currency}</span></td>
                         <td>
-                          <span className={statusClass}>{o.status}</span>
+                          <div style={{ fontWeight: 500, fontSize: 13 }}>{o.recipientName || <em style={{ color: "var(--text-muted)" }}>—</em>}</div>
+                          {o.recipientAddress && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{o.recipientAddress}</div>}
                         </td>
-                        <td>{o.amount.toLocaleString()} {o.currency}</td>
-                        <td style={{ fontSize: "11px", color: "var(--text-secondary)", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {assigned ? assigned.name : <em style={{ color: "var(--text-muted)" }}>None</em>}
+                        <td>
+                          {rider
+                            ? <div>
+                                <div style={{ fontWeight: 500 }}>{rider.name}</div>
+                                <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>{rider.did.slice(0, 22)}…</div>
+                              </div>
+                            : <em style={{ color: "var(--text-muted)", fontSize: 12 }}>Unassigned</em>
+                          }
                         </td>
-                        <td>{o.packageDescription || "-"}</td>
+                        <td style={{ color: "var(--text-secondary)" }}>{o.packageDescription || "—"}</td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -12,12 +12,16 @@ if (envKey && envKey.trim().length > 0) {
     // Generate public key from private key using Node.js crypto
     const crypto = await import("crypto");
     const privateKeyObj = crypto.createPrivateKey({
-      key: platformPrivateKey,
-      format: "raw",
-      type: "ed25519",
-    } as any);
+      key: Buffer.concat([
+        Buffer.from("302e020100300506032b657004220420", "hex"),
+        platformPrivateKey,
+      ]),
+      format: "der",
+      type: "pkcs8",
+    });
     const publicKeyObj = crypto.createPublicKey(privateKeyObj);
-    platformPublicKey = publicKeyObj.export({ format: "raw", type: "spki" } as any) as Buffer;
+    const pubJwk = publicKeyObj.export({ format: "jwk" }) as { x: string };
+    platformPublicKey = Buffer.from(pubJwk.x, "base64url");
     platformDid = createDidKey(platformPublicKey);
     console.log(`🛡️  Loaded Platform DID from env: ${platformDid}`);
   } catch (error) {

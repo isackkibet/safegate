@@ -10,13 +10,17 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
+    "dev:server": "tsx watch src/server.ts",
     "start": "node dist/index.js",
+    "start:server": "node dist/server.js",
     "test": "vitest run"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "@safegate/shared-types": "*",
+    "did-resolver": "^4.1.0",
     "dotenv": "^16.4.5",
+    "key-did-resolver": "^3.0.0",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {

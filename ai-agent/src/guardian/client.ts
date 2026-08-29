@@ -13,6 +13,20 @@ export interface IGuardianClient {
   authorize(request: StructuredRequest): Promise<GuardianDecision>;
 }
 
+function postJson<T>(url: string, body: unknown): Promise<T> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(async (response) => {
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Guardian HTTP ${response.status}: ${text}`);
+    }
+    return response.json() as Promise<T>;
+  });
+}
+
 export class HttpGuardianClient implements IGuardianClient {
   private readonly baseUrl: string;
 
@@ -21,19 +35,27 @@ export class HttpGuardianClient implements IGuardianClient {
   }
 
   async authorize(request: StructuredRequest): Promise<GuardianDecision> {
-    const response = await fetch(`${this.baseUrl}/authorize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-    });
+    return postJson<GuardianDecision>(`${this.baseUrl}/authorize`, request);
+  }
+}
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `Guardian HTTP ${response.status}: ${body}`
-      );
-    }
+/**
+ * Routes authorization through the Backend's agreed contract:
+ * POST /api/guardian/verify.
+ *
+ * This is the deliverable-specified integration point — the AI Agent calls the
+ * Backend endpoint, which proxies to the authoritative Guardian service.
+ * Using the Backend keeps a single auth gateway for the platform and means the
+ * Agent never needs to know the Guardian's address directly.
+ */
+export class HttpVerifyClient implements IGuardianClient {
+  private readonly backendUrl: string;
 
-    return response.json() as Promise<GuardianDecision>;
+  constructor(backendUrl: string) {
+    this.backendUrl = backendUrl.replace(/\/$/, "");
+  }
+
+  async authorize(request: StructuredRequest): Promise<GuardianDecision> {
+    return postJson<GuardianDecision>(`${this.backendUrl}/api/guardian/verify`, request);
   }
 }

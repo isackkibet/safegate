@@ -8,122 +8,97 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:300
 
 export default function DecisionFeed() {
   const [decisions, setDecisions] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
 
-  // Load initial logs
   useEffect(() => {
-    async function loadLogs() {
-      try {
-        const logs = await api.getAuditLogs();
-        // Keep top 15 for dashboard display
-        setDecisions(logs.slice(0, 15));
-      } catch (err) {
-        console.error("Failed to load initial audit logs:", err);
-        setError("Failed to fetch event history");
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadLogs();
+    api.getAuditLogs()
+      .then((logs) => setDecisions(logs.slice(0, 15)))
+      .catch(() => setError("Failed to load audit history"))
+      .finally(() => setLoading(false));
   }, []);
 
-  // Listen to live events via Server-Sent Events (SSE)
   useEffect(() => {
     const sse = new EventSource(`${BACKEND_URL}/events`);
-
-    sse.addEventListener("AUDIT_LOGGED", (event) => {
+    sse.addEventListener("AUDIT_LOGGED", (e) => {
       try {
-        const payload = JSON.parse(event.data) as AuditEntry;
-        setDecisions((prev) => [payload, ...prev.slice(0, 14)]);
-      } catch (err) {
-        console.error("Error parsing live audit log event:", err);
-      }
+        const entry = JSON.parse(e.data) as AuditEntry;
+        setDecisions((prev) => [entry, ...prev.slice(0, 14)]);
+      } catch {}
     });
-
-    sse.onerror = (err) => {
-      console.warn("SSE EventSource encountered error: connection may be retrying.", err);
-    };
-
-    return () => {
-      sse.close();
-    };
+    sse.onerror = () => {};
+    return () => sse.close();
   }, []);
 
-  if (loading) return <div style={{ color: "var(--text-secondary)" }}>Loading live event stream...</div>;
-  if (error) return <div style={{ color: "var(--accent-rose)" }}>{error}</div>;
+  if (loading) return <div className="loading-state">Loading live stream…</div>;
+  if (error)   return <div style={{ color: "var(--rose)", fontSize: 13 }}>{error}</div>;
+
+  if (decisions.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-icon">📭</div>
+        <p>No authorization events yet.</p>
+        <p style={{ fontSize: 12 }}>Events will appear here in real-time as the AI agent processes requests.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="feed-list">
-      {decisions.length === 0 ? (
-        <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-secondary)", fontSize: "14px" }}>
-          No validation decisions logged yet. Simulation events will appear here in real-time.
-        </div>
-      ) : (
-        decisions.map((item) => {
-          const isApproved = item.decision === "APPROVED";
-          const badgeClass = isApproved ? "badge badge-approved" : "badge badge-denied";
+      {decisions.map((item) => {
+        const ok = item.decision === "APPROVED";
+        return (
+          <div key={item.id} className="feed-item">
+            <div className="feed-header">
+              <span className={ok ? "badge badge-approved" : "badge badge-denied"}>
+                {item.decision}
+              </span>
+              <span className="feed-time">
+                {new Date(item.createdAt).toLocaleTimeString()}
+              </span>
+            </div>
 
-          return (
-            <div key={item.id} className="feed-item">
-              <div className="feed-header">
-                <span className={badgeClass}>{item.decision}</span>
-                <span className="feed-meta" style={{ fontSize: "11px" }}>
-                  {new Date(item.createdAt).toLocaleTimeString()}
-                </span>
+            <div>
+              <div className="feed-order">Order: {item.orderId}</div>
+              <div className="feed-did">{item.riderDid}</div>
+            </div>
+
+            <div className="feed-body">
+              <div className="feed-action">
+                Action: <strong>{item.action}</strong>
               </div>
 
-              <div>
-                <p style={{ fontWeight: 600, fontSize: "14px", marginBottom: "4px" }}>
-                  Order: {item.orderId}
-                </p>
-                <p style={{ color: "var(--text-secondary)", fontSize: "12px", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  Rider DID: {item.riderDid}
-                </p>
-              </div>
+              {!ok && item.reason && (
+                <div className="feed-reason">⚠ {item.reason}</div>
+              )}
 
-              <div className="feed-body">
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
-                  <span>Requested Action: <strong style={{ color: "var(--text-primary)" }}>{item.action}</strong></span>
-                </div>
-                {!isApproved && item.reason && (
-                  <p style={{ color: "var(--accent-rose)", fontSize: "12px", marginTop: "4px", fontWeight: 500 }}>
-                    ⚠️ {item.reason}
-                  </p>
-                )}
+              <div className="checks-grid">
+                {Object.entries(item.checks).map(([key, val]) => {
+                  let isPass = false;
+                  let label  = key;
 
-                <div className="checks-grid">
-                  {Object.entries(item.checks).map(([checkName, checkValue]) => {
-                    // Normalize display of vcStatus
-                    let isPass = false;
-                    let displayValue = String(checkValue);
+                  if (key === "vcStatus") {
+                    isPass = val === "ACTIVE";
+                    label  = `VC: ${val}`;
+                  } else {
+                    isPass = !!val;
+                    label  = key
+                      .replace(/([A-Z])/g, " $1")
+                      .replace(/^./, (s) => s.toUpperCase());
+                  }
 
-                    if (checkName === "vcStatus") {
-                      isPass = checkValue === "ACTIVE";
-                      displayValue = `VC Status: ${checkValue}`;
-                    } else {
-                      isPass = !!checkValue;
-                      // Convert camelCase to human readable title
-                      const title = checkName
-                        .replace(/([A-Z])/g, " $1")
-                        .toLowerCase()
-                        .replace(/^./, (str) => str.toUpperCase());
-                      displayValue = `${title}: ${isPass ? "PASS" : "FAIL"}`;
-                    }
-
-                    return (
-                      <div key={checkName} className={`check-pill ${isPass ? "pass" : "fail"}`}>
-                        <span className="check-indicator"></span>
-                        <span>{displayValue}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                  return (
+                    <div key={key} className={`check-pill ${isPass ? "pass" : "fail"}`}>
+                      <span className="check-dot" />
+                      <span>{label}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          );
-        })
-      )}
+          </div>
+        );
+      })}
     </div>
   );
 }

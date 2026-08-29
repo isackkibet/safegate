@@ -5,131 +5,156 @@ import type { AuditEntry } from "@safegate/shared-types";
 import { api } from "@/lib/api";
 
 export default function AuditPage() {
-  const [logs, setLogs] = useState<AuditEntry[]>([]);
+  const [logs,    setLogs]    = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  // Filter criteria
-  const [orderIdFilter, setOrderIdFilter] = useState("");
+  const [orderIdFilter,  setOrderIdFilter]  = useState("");
   const [riderDidFilter, setRiderDidFilter] = useState("");
 
-  async function loadLogs() {
+  async function loadLogs(orderId?: string, riderDid?: string) {
     setLoading(true);
     try {
       const data = await api.getAuditLogs({
-        orderId: orderIdFilter.trim() || undefined,
-        riderDid: riderDidFilter.trim() || undefined,
+        orderId:  orderId  ?? undefined,
+        riderDid: riderDid ?? undefined,
       });
       setLogs(data);
-    } catch (err) {
-      console.error("Failed to load audit logs:", err);
-    } finally {
-      setLoading(false);
-    }
+    } catch {}
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    loadLogs();
-  }, []);
+  useEffect(() => { loadLogs(); }, []);
 
-  function handleFilterSubmit(e: React.FormEvent) {
+  function handleFilter(e: React.FormEvent) {
     e.preventDefault();
-    loadLogs();
+    loadLogs(orderIdFilter.trim(), riderDidFilter.trim());
   }
 
   function handleReset() {
-    setOrderIdFilter("");
-    setRiderDidFilter("");
-    // Load fresh logs without filters
-    setLoading(true);
-    api.getAuditLogs().then((data) => {
-      setLogs(data);
-      setLoading(false);
-    });
+    setOrderIdFilter(""); setRiderDidFilter("");
+    loadLogs();
   }
+
+  const approved = logs.filter(l => l.decision === "APPROVED").length;
+  const denied   = logs.length - approved;
 
   return (
     <div>
+      <div className="page-title">Audit Ledger</div>
+      <div className="page-sub">Append-only cryptographic authorization history</div>
+
+      {/* summary pills */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <div style={{ padding: "8px 16px", borderRadius: 8, background: "var(--bg-card)", border: "1px solid var(--border)", fontSize: 13 }}>
+          <span style={{ color: "var(--text-muted)" }}>Total  </span>
+          <strong>{logs.length}</strong>
+        </div>
+        <div style={{ padding: "8px 16px", borderRadius: 8, background: "var(--emerald-dim)", border: "1px solid rgba(16,185,129,0.2)", fontSize: 13, color: "var(--emerald)" }}>
+          ✓ Approved: <strong>{approved}</strong>
+        </div>
+        <div style={{ padding: "8px 16px", borderRadius: 8, background: "var(--rose-dim)", border: "1px solid rgba(244,63,94,0.2)", fontSize: 13, color: "var(--rose)" }}>
+          ✗ Denied: <strong>{denied}</strong>
+        </div>
+      </div>
+
+      {/* Filter */}
       <div className="card">
-        <div className="card-title">Filter Audit Ledger</div>
-        <form onSubmit={handleFilterSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "20px", alignItems: "end" }}>
+        <div className="card-header">
+          <div className="card-title">🔍 Filter</div>
+        </div>
+        <form onSubmit={handleFilter} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 12, alignItems: "end" }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Search Order ID</label>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="e.g. ORD-001"
-              value={orderIdFilter}
-              onChange={(e) => setOrderIdFilter(e.target.value)}
-            />
+            <label>Order ID</label>
+            <input className="form-control" placeholder="e.g. ORD-001"
+              value={orderIdFilter} onChange={e => setOrderIdFilter(e.target.value)} />
           </div>
-
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Search Rider DID</label>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="did:key:z6Mk..."
-              value={riderDidFilter}
-              onChange={(e) => setRiderDidFilter(e.target.value)}
-            />
+            <label>Rider DID</label>
+            <input className="form-control" placeholder="did:key:z6Mk…"
+              value={riderDidFilter} onChange={e => setRiderDidFilter(e.target.value)} />
           </div>
-
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button type="submit" className="btn">Search Logs</button>
-            <button type="button" className="btn btn-secondary" onClick={handleReset}>Reset</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn" type="submit">Search</button>
+            <button className="btn btn-secondary" type="button" onClick={handleReset}>Reset</button>
           </div>
         </form>
       </div>
 
-      <div className="card">
-        <div className="card-title">Append-Only Cryptographic Audit Ledger</div>
+      {/* Log entries */}
+      <div className="card" style={{ marginBottom: 0 }}>
+        <div className="card-header">
+          <div className="card-title">📜 Authorization Log</div>
+          <span className="badge badge-info">{logs.length} entries</span>
+        </div>
+
         {loading ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-secondary)" }}>
-            Querying audit history...
-          </div>
+          <div className="loading-state">Loading audit history…</div>
         ) : logs.length === 0 ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-secondary)", fontSize: "14px" }}>
-            No matching audit logs found in registry node.
+          <div className="empty-state">
+            <div className="empty-icon">📭</div>
+            <p>No audit entries match your filter.</p>
           </div>
         ) : (
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Timestamp</th>
-                  <th>Order Reference</th>
-                  <th>Rider DID</th>
-                  <th>Action</th>
-                  <th>Verdict</th>
-                  <th>Detailed Check Failure Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => {
-                  const isApproved = log.decision === "APPROVED";
-                  const badgeClass = isApproved ? "badge badge-approved" : "badge badge-denied";
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {logs.map(log => {
+              const ok = log.decision === "APPROVED";
+              const isOpen = expanded === log.id;
+              return (
+                <div key={log.id} style={{
+                  border: `1px solid ${ok ? "rgba(16,185,129,0.2)" : "rgba(244,63,94,0.18)"}`,
+                  borderRadius: 8, overflow: "hidden",
+                  background: "var(--bg-secondary)",
+                }}>
+                  {/* Row header */}
+                  <div
+                    style={{ display: "grid", gridTemplateColumns: "110px 90px 100px 160px 1fr 28px", alignItems: "center", gap: 12, padding: "12px 16px", cursor: "pointer" }}
+                    onClick={() => setExpanded(isOpen ? null : log.id)}
+                  >
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {new Date(log.createdAt).toLocaleTimeString()}<br/>
+                      <span style={{ fontSize: 10 }}>{new Date(log.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <span className={ok ? "badge badge-approved" : "badge badge-denied"}>{log.decision}</span>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{log.orderId}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {log.riderDid.slice(0, 20)}…
+                    </div>
+                    <div style={{ fontSize: 12, color: ok ? "var(--text-secondary)" : "var(--rose)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {ok ? <span style={{ color: "var(--emerald)" }}>✓ All checks passed</span> : `✗ ${log.reason}`}
+                    </div>
+                    <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center" }}>
+                      {isOpen ? "▲" : "▼"}
+                    </div>
+                  </div>
 
-                  return (
-                    <tr key={log.id}>
-                      <td style={{ fontSize: "12px", whiteSpace: "nowrap" }}>
-                        {new Date(log.createdAt).toLocaleString()}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{log.orderId}</td>
-                      <td style={{ fontSize: "11px", fontFamily: "monospace", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {log.riderDid}
-                      </td>
-                      <td>{log.action}</td>
-                      <td>
-                        <span className={badgeClass}>{log.decision}</span>
-                      </td>
-                      <td style={{ fontSize: "12px", color: isApproved ? "var(--text-secondary)" : "var(--accent-rose)", maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {isApproved ? "✓ All validations passed" : `❌ ${log.reason}`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  {/* Expanded checks */}
+                  {isOpen && (
+                    <div style={{ borderTop: "1px solid var(--border)", padding: "12px 16px", background: "var(--bg-primary)" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
+                        Action: <strong style={{ color: "var(--text-primary)" }}>{log.action}</strong>
+                        &nbsp;·&nbsp;
+                        Rider DID: <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>{log.riderDid}</span>
+                      </div>
+                      <div className="checks-grid">
+                        {Object.entries(log.checks).map(([key, val]) => {
+                          let isPass = key === "vcStatus" ? val === "ACTIVE" : !!val;
+                          let label  = key === "vcStatus"
+                            ? `VC Status: ${val}`
+                            : key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase());
+                          return (
+                            <div key={key} className={`check-pill ${isPass ? "pass" : "fail"}`}>
+                              <span className="check-dot" />
+                              <span>{label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
