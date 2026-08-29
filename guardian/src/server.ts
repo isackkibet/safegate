@@ -18,6 +18,11 @@ app.get("/health", (req, res) => {
   res.json({ status: "OK", service: "SafeGate Guardian" });
 });
 
+// Alias so both /health and /api/health probes succeed
+app.get("/api/health", (req, res) => {
+  res.json({ status: "OK", service: "SafeGate Guardian" });
+});
+
 // POST /authorize
 app.post("/authorize", async (req, res) => {
   try {

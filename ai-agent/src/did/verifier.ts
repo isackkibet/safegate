@@ -15,10 +15,11 @@ export function looksLikeDid(did: string): boolean {
 
 /**
  * Extracts a DID from a free-text rider message if present.
- * Returns undefined if none found.
+ * Returns undefined if none found. Strict about did:key base58btc so trailing
+ * punctuation (".", ",") is not captured.
  */
 export function extractDidFromText(text: string): string | undefined {
-  const match = text.match(/did:[a-z]+:[a-zA-Z0-9._:-]+/);
+  const match = text.match(/did:key:z[1-9A-HJ-NP-Za-km-z]+/);
   return match?.[0];
 }
 

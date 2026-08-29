@@ -120,10 +120,13 @@ export function signVc(
   const signingInput = getVcSigningInput(clone);
 
   const privateKeyObj = crypto.createPrivateKey({
-    key: privateKey,
-    format: "raw",
-    type: "ed25519",
-  } as any);
+    key: Buffer.concat([
+      Buffer.from("302e020100300506032b657004220420", "hex"),
+      privateKey,
+    ]),
+    format: "der",
+    type: "pkcs8",
+  });
 
   const signature = crypto.sign(null, signingInput, privateKeyObj);
   const signatureB58 = "z" + base58Encode(signature);
@@ -143,9 +146,11 @@ export function signVc(
  * Generates a new random Ed25519 keypair.
  */
 export function generateEd25519Keypair(): { publicKey: Buffer; privateKey: Buffer } {
-  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519", {
-    publicKeyEncoding: { format: "raw", type: "spki" },
-    privateKeyEncoding: { format: "raw", type: "pkcs8" },
-  }) as unknown as { publicKey: Buffer; privateKey: Buffer };
-  return { publicKey, privateKey };
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  const pubJwk = publicKey.export({ format: "jwk" }) as { x: string };
+  const privJwk = privateKey.export({ format: "jwk" }) as { d: string };
+  return {
+    publicKey: Buffer.from(pubJwk.x, "base64url"),
+    privateKey: Buffer.from(privJwk.d, "base64url"),
+  };
 }
