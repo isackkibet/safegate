@@ -17,7 +17,7 @@ import {
   createDidKey,
   generateEd25519Keypair,
   signVc,
-} from "../src/did/cryptoUtils.js";
+} from "@safegate/shared-crypto";
 
 function issueTestVc(riderDid: string, maxAmount = 25000) {
   const { publicKey, privateKey } = generateEd25519Keypair();

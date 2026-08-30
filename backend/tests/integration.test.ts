@@ -27,7 +27,7 @@ describe("Backend & Guardian Integration Seam Test", () => {
     // We mock the backend registry endpoint to return the issued VC
     const backendMockUrl = "http://localhost:9999"; // unused in local mock
     const { extractPublicKeyFromDid, verifyVcSignature } = await import(
-      "../../guardian/src/checks/cryptoUtils.js"
+      "@safegate/shared-crypto"
     );
 
     const issuerPubKey = extractPublicKeyFromDid(signedVc.issuer);

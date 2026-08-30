@@ -1,4 +1,4 @@
-import { generateEd25519Keypair, createDidKey } from "./cryptoUtils.js";
+import { generateEd25519Keypair, createDidKey } from "@safegate/shared-crypto";
 
 let platformPrivateKey: Buffer;
 let platformPublicKey: Buffer;

@@ -1,3 +1,16 @@
+/**
+ * Shared Ed25519 / did:key cryptographic utilities used across the SafeGate
+ * monorepo (backend issuer, guardian verifier, AI-agent pre-check).
+ *
+ * This is the single source of truth for:
+ *   - base58 (multibase base58btc) encode/decode
+ *   - did:key construction and parsing (Ed25519 multicodec 0xed 0x01)
+ *   - W3C Ed25519Signature2020 signing and verification over JSON-LD VCs
+ *
+ * Services MUST import from here instead of re-implementing crypto so that
+ * cross-service signature verification never drifts.
+ */
+
 import crypto from "crypto";
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -6,6 +19,7 @@ for (let i = 0; i < ALPHABET.length; i++) {
   ALPHABET_MAP[ALPHABET.charAt(i)] = i;
 }
 
+/** Decodes a base58btc (base58) string into bytes. */
 export function base58Decode(string: string): Uint8Array {
   if (string.length === 0) return new Uint8Array(0);
   const bytes = [0];
@@ -29,6 +43,7 @@ export function base58Decode(string: string): Uint8Array {
   return new Uint8Array(bytes.reverse());
 }
 
+/** Encodes bytes into a base58btc (base58) string. */
 export function base58Encode(source: Uint8Array): string {
   if (source.length === 0) return "";
   const digits = [0];
@@ -55,23 +70,21 @@ export function base58Encode(source: Uint8Array): string {
 }
 
 /**
- * Extracts raw 32-byte Ed25519 public key from a did:key DID.
- * Example DID: did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK
+ * Extracts the raw 32-byte Ed25519 public key from a `did:key` DID.
+ * Example: `did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK`
  */
 export function extractPublicKeyFromDid(did: string): Buffer {
   if (!did.startsWith("did:key:z")) {
     throw new Error("Only Ed25519 did:key DIDs starting with 'did:key:z' are supported");
   }
-  // The 'z' indicates base58btc. The rest of the string is the encoded multicodec public key.
   const multicodecString = did.substring("did:key:z".length);
   const decoded = base58Decode(multicodecString);
 
-  // Ed25519 multicodec prefix is 0xed 0x01 (varint for 0xed = 237)
+  // Ed25519 multicodec prefix is 0xed 0x01 (varint for 0xed = 237).
   if (decoded[0] !== 0xed || decoded[1] !== 0x01) {
     throw new Error("Invalid Ed25519 multicodec prefix");
   }
 
-  // The remaining 32 bytes is the public key
   const pubKeyBytes = decoded.subarray(2);
   if (pubKeyBytes.length !== 32) {
     throw new Error(`Invalid public key length: expected 32, got ${pubKeyBytes.length}`);
@@ -80,69 +93,65 @@ export function extractPublicKeyFromDid(did: string): Buffer {
   return Buffer.from(pubKeyBytes);
 }
 
-/**
- * Creates did:key string from a raw 32-byte Ed25519 public key.
- */
+/** Builds a `did:key` string from a raw 32-byte Ed25519 public key. */
 export function createDidKey(publicKey: Buffer): string {
-  const prefix = Buffer.from([0xed, 0x01]);
-  const multicodec = Buffer.concat([prefix, publicKey]);
+  const multicodec = Buffer.concat([Buffer.from([0xed, 0x01]), publicKey]);
   return `did:key:z${base58Encode(multicodec)}`;
 }
 
-/**
- * Normalizes a VC document for signature verification by removing the proof object.
- * Returns the stable stringified JSON.
- */
-export function getVcSigningInput(vc: Record<string, any>): Buffer {
-  // Deep clone and delete proof
-  const clone = JSON.parse(JSON.stringify(vc));
-  delete clone.proof;
-
-  // Determinisitc sorting of keys for simple canonicalization
-  return Buffer.from(deterministicStringify(clone), "utf-8");
-}
-
-function deterministicStringify(obj: any): string {
+/** Stable, key-sorted JSON serialization used to canonicalize VC documents. */
+function deterministicStringify(obj: unknown): string {
   if (obj === null) return "null";
   if (typeof obj !== "object") return JSON.stringify(obj);
   if (Array.isArray(obj)) {
     return "[" + obj.map(deterministicStringify).join(",") + "]";
   }
-  const keys = Object.keys(obj).sort();
-  const properties = keys.map((key) => {
-    return JSON.stringify(key) + ":" + deterministicStringify(obj[key]);
-  });
-  return "{" + properties.join(",") + "}";
+  const record = obj as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const properties = keys
+    .map((key) => JSON.stringify(key) + ":" + deterministicStringify(record[key]))
+    .join(",");
+  return "{" + properties + "}";
 }
 
 /**
- * Cryptographically verifies an Ed25519Signature2020 proof on a VC.
+ * Computes the canonical signing input for a VC by stripping its `proof`
+ * and deterministically stringifying the remainder.
  */
-export function verifyVcSignature(vc: Record<string, any>, publicKey: Buffer): boolean {
+export function getVcSigningInput(vc: Record<string, any>): Buffer {
+  const clone = JSON.parse(JSON.stringify(vc));
+  delete clone.proof;
+  return Buffer.from(deterministicStringify(clone), "utf-8");
+}
+
+function toPublicKeyObject(publicKey: Buffer): crypto.KeyObject {
+  return crypto.createPublicKey({
+    key: Buffer.concat([
+      Buffer.from("302a300506032b6570032100", "hex"),
+      publicKey,
+    ]),
+    format: "der",
+    type: "spki",
+  });
+}
+
+/**
+ * Verifies an `Ed25519Signature2020` proof on a VC using the issuer's public
+ * key. Returns `false` on any malformed input or failed verification.
+ */
+export function verifyVcSignature(
+  vc: Record<string, any>,
+  publicKey: Buffer
+): boolean {
   try {
     const proof = vc.proof;
-    if (!proof || proof.type !== "Ed25519Signature2020") {
-      return false;
-    }
-
+    if (!proof || proof.type !== "Ed25519Signature2020") return false;
     const proofValue = proof.proofValue;
-    if (!proofValue || !proofValue.startsWith("z")) {
-      return false;
-    }
+    if (!proofValue || !proofValue.startsWith("z")) return false;
 
-    const signature = base58Decode(proofValue.substring(1)); // strip 'z' prefix
+    const signature = base58Decode(proofValue.substring(1));
     const signingInput = getVcSigningInput(vc);
-
-    const publicKeyObj = crypto.createPublicKey({
-      key: Buffer.concat([
-        Buffer.from("302a300506032b6570032100", "hex"),
-        publicKey,
-      ]),
-      format: "der",
-      type: "spki",
-    });
-
-    return crypto.verify(null, signingInput, publicKeyObj, signature);
+    return crypto.verify(null, signingInput, toPublicKeyObject(publicKey), signature);
   } catch (error) {
     console.error("Crypto verification error:", error);
     return false;
@@ -150,8 +159,8 @@ export function verifyVcSignature(vc: Record<string, any>, publicKey: Buffer): b
 }
 
 /**
- * Signs a VC document with an Ed25519 private key.
- * Appends the proof object to the VC.
+ * Signs a VC document with an Ed25519 private key, appending the
+ * `Ed25519Signature2020` proof to the returned copy.
  */
 export function signVc(
   vc: Record<string, any>,
@@ -163,34 +172,33 @@ export function signVc(
   delete clone.proof;
 
   const signingInput = getVcSigningInput(clone);
-
-    const privateKeyObj = crypto.createPrivateKey({
-      key: Buffer.concat([
-        Buffer.from("302e020100300506032b657004220420", "hex"),
-        privateKey,
-      ]),
-      format: "der",
-      type: "pkcs8",
-    });
+  const privateKeyObj = crypto.createPrivateKey({
+    key: Buffer.concat([
+      Buffer.from("302e020100300506032b657004220420", "hex"),
+      privateKey,
+    ]),
+    format: "der",
+    type: "pkcs8",
+  });
 
   const signature = crypto.sign(null, signingInput, privateKeyObj);
-  const signatureB58 = "z" + base58Encode(signature);
 
   clone.proof = {
     type: "Ed25519Signature2020",
     created: new Date().toISOString(),
-    verificationMethod: verificationMethod,
+    verificationMethod,
     proofPurpose: "assertionMethod",
-    proofValue: signatureB58,
+    proofValue: "z" + base58Encode(signature),
   };
 
   return clone;
 }
 
-/**
- * Generates a new random Ed25519 keypair.
- */
-export function generateEd25519Keypair(): { publicKey: Buffer; privateKey: Buffer } {
+/** Generates a fresh Ed25519 keypair with raw 32-byte keys. */
+export function generateEd25519Keypair(): {
+  publicKey: Buffer;
+  privateKey: Buffer;
+} {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
   const pubJwk = publicKey.export({ format: "jwk" }) as { x: string };
   const privJwk = privateKey.export({ format: "jwk" }) as { d: string };

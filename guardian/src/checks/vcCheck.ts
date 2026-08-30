@@ -1,7 +1,7 @@
 import {
   extractPublicKeyFromDid,
   verifyVcSignature,
-} from "./cryptoUtils.js";
+} from "@safegate/shared-crypto";
 import type { DeliveryRiderVC, VCStatus } from "@safegate/shared-types";
 import fetch from "node-fetch";
 

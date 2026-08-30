@@ -16,7 +16,7 @@
 
 import { Resolver } from "did-resolver";
 import { getResolver as getKeyResolver } from "key-did-resolver";
-import { extractPublicKeyFromDid, verifyVcSignature } from "./cryptoUtils.js";
+import { extractPublicKeyFromDid, verifyVcSignature } from "@safegate/shared-crypto";
 import type { VCStatus } from "@safegate/shared-types";
 
 export interface RiderPrecheck {

@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
+    "@safegate/shared-crypto": "*",
     "@safegate/shared-types": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

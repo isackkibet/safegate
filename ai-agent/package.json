@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
+    "@safegate/shared-crypto": "*",
     "@safegate/shared-types": "*",
     "did-resolver": "^4.1.0",
     "dotenv": "^16.4.5",

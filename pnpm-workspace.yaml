@@ -1,6 +1,0 @@
-packages:
-  - "packages/*"
-  - "ai-agent"
-  - "guardian"
-  - "backend"
-  - "frontend"

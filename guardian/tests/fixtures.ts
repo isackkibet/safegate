@@ -2,7 +2,7 @@ import {
   generateEd25519Keypair,
   createDidKey,
   signVc,
-} from "../src/checks/cryptoUtils.js";
+} from "@safegate/shared-crypto";
 import type { DeliveryRiderVC } from "@safegate/shared-types";
 
 // Generate platform keys

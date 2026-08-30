@@ -1,4 +1,4 @@
-import { signVc } from "./cryptoUtils.js";
+import { signVc } from "@safegate/shared-crypto";
 import { getPlatformKeys } from "./keys.js";
 import type { DeliveryAction } from "@safegate/shared-types";
 

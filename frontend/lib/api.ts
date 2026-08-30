@@ -1,7 +1,10 @@
 import type { Order, Rider, AuditEntry, VCStatus } from "@safegate/shared-types";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3002";
-const API_KEY = "safegate-dispatcher-key-change-me"; // Default dispatcher credential
+// In production, set NEXT_PUBLIC_DISPATCHER_API_KEY (see .env.example). The
+// fallback below is a local development convenience only.
+const API_KEY =
+  process.env.NEXT_PUBLIC_DISPATCHER_API_KEY || "safegate-dispatcher-key-change-me";
 
 async function request(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
