@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { eventStream } from "../events.js";
 
@@ -9,7 +10,7 @@ router.get("/", async (req, res) => {
   try {
     const { orderId, riderDid } = req.query;
 
-    const whereClause: any = {};
+    const whereClause: Prisma.AuditEntryWhereInput = {};
     if (orderId) {
       whereClause.orderId = String(orderId);
     }
